@@ -1,0 +1,12 @@
+{
+  "name": "broken-image-finder",
+  "fullName": "Broken Image Finder",
+  "id": "bif@dupps.it",
+  "description": "The scope of the broken image finder plugin is to detect unavailable images by scaning the acutual visited website and its embedded stylesheets.",
+  "author": "Bastian Dupps",
+  "license": "MPL 2.0",
+  "version": "0.3.0",
+  "icon": "icon.png",
+  "icon64": "icon64.png",
+  "homepage": "http://dupps.it/bif/"
+}
