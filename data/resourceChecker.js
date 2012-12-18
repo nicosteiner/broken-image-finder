@@ -1,4 +1,61 @@
+var BIF = BIF || {};
+
+BIF.Analyze = {};
+
+// all starts here
+// message is emited from main.js when webpage is loaded (onAttach)
+
+if (self) {
+
+  self.port.on('getResults', function() {
+
+    BIF.Analyze.checkAllImgURLs();
+
+    BIF.Analyze.checkAllStylesheetURLs();
+
+  });
+
+  self.port.on('gotResponseText', function(responseText) {
+
+    var urlPosition, strike, urlEnd, strikeFinal;
+
+    // in our case this is always stylesheet text content
+    
+    // extract image urls from this text content
+    
+    do {
+
+      urlPosition = responseText.indexOf('url(');
+
+      if (urlPosition !== -1) {
+
+        strike = responseText.substring(urlPosition + 4);
+        
+        urlEnd = strike.indexOf(')');
+        
+        strikeFinal = BIF.Analyze.normalizeURLs(strike.substring(0, urlEnd));
+
+        if (typeof strikeFinal !== 'undefined' && strikeFinal.match(/^\S+\.(gif|jpg|jpeg|png)$/)) {
+
+          // check status code of found URL
+          
+          self.port.emit('getHTTPStatusCode', [strikeFinal, 'bla', 'blub']);
+        
+        }
+        
+        responseText = strike.substring(urlEnd + 1);
+
+      }
+
+    } while (urlPosition !== -1);
+
+  });
+  
+}
+
+// implement that in OO style
 // function to remove double data in arrays
+/*
 function removeDuplicates(arr) {
     var copy = arr.slice(0);
     arr.length = 0;
@@ -10,205 +67,103 @@ function removeDuplicates(arr) {
     }
     return arr;
 }
+*/
 
+BIF.Analyze = {
 
-// function to remove html entities
-function htmlEntities(str) {
-    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/['"]/g, '');
-}
+  checkAllImgURLs: function() {
+  
+    var allImgURLs = [],
+        imgElements,
+        imgSrc,
+        i;
+    
+    // 1. Step: Find all image URLs
+    
+    imgElements = document.querySelectorAll('img[src]');
 
+    for (i = 0; i < imgElements.length; i += 1) {
 
-// the brain (XMLHttpRequest)
-var xhrCommunicator = function(resourceInfos, callback) {
+      imgSrc = imgElements[i].getAttribute('src');
 
-    this.initXHR();
+      // check if path is relative
+      
+      if (imgSrc.match(/^\S+\.(gif|jpg|jpeg|png)$/)) {
 
-    this.getResponseCode(resourceInfos, callback);
+        allImgURLs.push([imgSrc, 'html', 'image tag']);
+          
+      }
 
-};
-
-xhrCommunicator.prototype = {
-
-    initXHR: function() {
-
-        this.xhr = new XMLHttpRequest();
-    },
-
-    getResponseCode: function(resourceInfos, callback) {
-
-        if (this.xhr) {
-
-            // true => asynchronous
-            this.xhr.open('GET', resourceInfos[0], true);
-
-            this.xhr.onreadystatechange = (function(that, resourceInfos) {
-
-                return function() {
-
-                    var newWebResourceURLs, responseText, urlPosition, strike, urlEnd, strikeFinal, url, urlOrigin, urlType, showId, status, infoDiv, body;
-
-                    url = resourceInfos[0];
-                    urlOrigin = resourceInfos[1];
-                    urlType = resourceInfos[2];
-
-                    // request finished and response is ready
-                    if (that.xhr.readyState === 4) {
-
-                        status = that.xhr.status;
-
-                        // if statuscode is NOT 'ok'
-                        if (status !== 200) {
-
-                            resourceInfos[3] = status;
-
-                            // show a notification box for 6 seconds
-
-                            infoDiv = document.getElementById('infoDiv');
-
-                            if(!infoDiv) {
-
-                                createStyleTag();
-
-                                infoDiv = document.createElement('div');
-                                infoDiv.id = 'infoDiv';
-                                infoDiv.textContent = 'there are broken images!';
-                                body = document.getElementsByTagName('body')[0];
-                                body.appendChild(infoDiv);
-
-                                setTimeout(function() { body.removeChild(infoDiv); }, 6000);
-                            }
-
-                            // emit each error
-                            self.port.emit('resultsAvailable',resourceInfos);
-
-                        } else {
-
-                            // find every 'external' URL and push them all in a special array
-                            newWebResourceURLs = [];
-
-                            responseText = that.xhr.responseText;
-
-                            do {
-
-                                // better to use RegEx? >> problem: e.g. lustich.de -> .urlHeader{...
-                                urlPosition = responseText.indexOf('url');
-
-                                if (urlPosition !== -1) {
-
-                                    strike = responseText.substring(urlPosition+4);
-                                    urlEnd = strike.indexOf(')');
-                                    strikeFinal = strike.substring(0,urlEnd);
-
-                                    // remove html entities
-                                    strikeFinal = htmlEntities(strikeFinal);
-
-                                    if (!strikeFinal.match('//') && strikeFinal.match(/^\S+\.(gif|jpg|jpeg|png)$/)) {
-
-                                      newWebResourceURLs.push([strikeFinal, urlOrigin, urlType]);
-
-                                    }
-
-                                    responseText = strike.substring(urlEnd+1);
-                                }
-
-                            } while (urlPosition !== -1);
-
-                            // remove double data
-                            newWebResourceURLs = removeDuplicates(newWebResourceURLs);
-
-                            // check the 'new' URLs
-                            xhrAction(newWebResourceURLs);
-                        }
-                    }
-                };
-
-            }(this, resourceInfos));
-
-            // send requestgetResults
-            this.xhr.send(null);
-        }
     }
+  
+    // 2. Step: Iterate through all found URLs and check status codes
+    
+    for (i = 0; i < allImgURLs.length; i += 1) {
+    
+      // message is sent to main.js where request is generated
+    
+      self.port.emit('getHTTPStatusCode', allImgURLs[i]);
+    
+    }
+  
+  },
+  
+  checkAllStylesheetURLs: function() {
+  
+    var allStylesheetURLs = [],
+        linkElements,
+        linkHref,
+        i;
+    
+    // find all stylesheets (only with src-attribute)
+    
+    linkElements = document.querySelectorAll('link[rel^="stylesheet"]');
+
+    for (i = 0; i < linkElements.length; i += 1) {
+
+      linkHref = BIF.Analyze.normalizeURLs(linkElements[i].getAttribute('href'));
+
+      // check if path is relative
+      
+      allStylesheetURLs.push([linkHref, linkHref, 'link tag']);
+
+    }
+    
+    // 2. Step: Iterate through all found URLs and get stylesheet content
+    
+    for (i = 0; i < allStylesheetURLs.length; i += 1) {
+    
+      // message is sent to main.js where request is generated
+    
+      self.port.emit('getResponseText', allStylesheetURLs[i]);
+    
+    }
+  
+  },
+  
+  normalizeURLs: function(url) {
+  
+    // this normalization is a tricky part
+    // I'll start with "simple" relative URLs
+    // other relative cases have to be added
+    
+    var normalizedURL,
+        fullDomain;
+    
+    fullDomain = location.protocol + '//' + location.hostname + (location.port ? ':' + location.port : '');
+    
+    // simple relative URLs starting with /
+    
+    if (url.indexOf('/') === 0) {
+    
+      // in this case add domain
+      
+      normalizedURL = fullDomain + url;
+    
+    }
+    
+    return normalizedURL;
+  
+  }
+  
 };
-
-
-// function to collect all resources
-var allWebResourceURLs = [];
-
-function collectResources() {
-
-    var imageElems, imgUrl, styleElems, styleUrl;
-
-    // find all images (only with src-attribute)
-    imageElems = document.querySelectorAll('img[src]');
-
-    for (var i = 0; i < imageElems.length; i++) {
-
-        imgUrl = imageElems[i].getAttribute('src');
-
-        // only get 'real' images
-        if (!imgUrl.match('//') && imgUrl.match(/^\S+\.(gif|jpg|jpeg|png)$/)) {
-
-            imgUrl = htmlEntities(imgUrl);
-
-            allWebResourceURLs.push([imgUrl, 'html', 'image tag']);
-        }
-    };
-
-    // find all stylesheets
-    styleElems = document.querySelectorAll('link[rel^="stylesheet"]');
-
-    for (var i = 0; i < styleElems.length; i++) {
-
-        styleUrl = styleElems[i].getAttribute('href');
-
-        if (!styleUrl.match('//')) {
-
-            styleUrl = htmlEntities(styleUrl);
-
-            allWebResourceURLs.push([styleUrl, styleUrl, 'link tag']);
-        }
-    };
-};
-
-
-// function to check each URL of any resource ('all' and 'new')
-function xhrAction(resourceURLs) {
-
-    for (var i = 0; i < resourceURLs.length; i++) {
-
-        new xhrCommunicator(resourceURLs[i], function(responseCode) {
-
-            responseCodes.push(responseCode);
-
-        });
-    };
-}
-
-
-function createStyleTag() {
-
-    var style, styleTag, head;
-
-    // definition of style
-    style = '#infoDiv { position: fixed; top: 30px; right: 30px; padding: 10px; color: #d8000c; background-color: #ffbaba; opacity: 0.9; border: 1px solid #d8000c; border-radius: 3px; font-size: 12px; font-weight: normal; font-family: Arial, sans serif; z-index: 999; box-shadow: 0 0 20px #212121; }';
-
-    // create style tag
-    styleTag = document.createElement('style');
-    styleTag.setAttribute('type','text/css');
-    styleTag.id = 'popupStyle';
-    styleTag.innerHTML = style;
-    head = document.getElementsByTagName('head')[0];
-    head.appendChild(styleTag);
-}
-
-
-// init
-self.port.on('getResults', function() {
-
-    collectResources();
-
-    allWebResourceURLs = removeDuplicates(allWebResourceURLs);
-
-    xhrAction(allWebResourceURLs);
-
-});
