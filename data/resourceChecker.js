@@ -1,6 +1,5 @@
 // function to remove double data in arrays
 function removeDuplicates(arr) {
-
     var copy = arr.slice(0);
     arr.length = 0;
 
@@ -10,6 +9,12 @@ function removeDuplicates(arr) {
         }
     }
     return arr;
+}
+
+
+// function to remove html entities
+function htmlEntities(str) {
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/['"]/g, '');
 }
 
 
@@ -85,6 +90,7 @@ xhrCommunicator.prototype = {
 
                             do {
 
+                                // better to use RegEx? >> problem: e.g. lustich.de -> .urlHeader{...
                                 urlPosition = responseText.indexOf('url');
 
                                 if (urlPosition !== -1) {
@@ -93,13 +99,10 @@ xhrCommunicator.prototype = {
                                     urlEnd = strike.indexOf(')');
                                     strikeFinal = strike.substring(0,urlEnd);
 
-                                    // XSS prevention
-                                    strikeFinal = HtmlEntities(strikeFinal);
+                                    // remove html entities
+                                    strikeFinal = htmlEntities(strikeFinal);
 
-                                    // remove quotes
-                                    strikeFinal = strikeFinal.replace(/['"]/g, '');
-
-                                    if (!strikeFinal.match('//')) {
+                                    if (!strikeFinal.match('//') && strikeFinal.match(/^\S+\.(gif|jpg|jpeg|png)$/)) {
 
                                       newWebResourceURLs.push([strikeFinal, urlOrigin, urlType]);
 
@@ -142,10 +145,10 @@ function collectResources() {
 
         imgUrl = imageElems[i].getAttribute('src');
 
-        // prevents pushing trackingpixel into array
-        if (!imgUrl.match('//')) {
+        // only get 'real' images
+        if (!imgUrl.match('//') && imgUrl.match(/^\S+\.(gif|jpg|jpeg|png)$/)) {
 
-            imgUrl = HtmlEntities(imgUrl);
+            imgUrl = htmlEntities(imgUrl);
 
             allWebResourceURLs.push([imgUrl, 'html', 'image tag']);
         }
@@ -160,18 +163,12 @@ function collectResources() {
 
         if (!styleUrl.match('//')) {
 
-            styleUrl = HtmlEntities(styleUrl);
+            styleUrl = htmlEntities(styleUrl);
 
             allWebResourceURLs.push([styleUrl, styleUrl, 'link tag']);
         }
     };
 };
-
-
-// function to prevent XSS
-function HtmlEntities(str) {
-    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
 
 
 // function to check each URL of any resource ('all' and 'new')
@@ -209,6 +206,8 @@ function createStyleTag() {
 self.port.on('getResults', function() {
 
     collectResources();
+
+    allWebResourceURLs = removeDuplicates(allWebResourceURLs);
 
     xhrAction(allWebResourceURLs);
 
